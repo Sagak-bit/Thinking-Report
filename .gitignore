@@ -1,0 +1,33 @@
+# Secrets / env
+.env
+.env.local
+.streamlit/secrets.toml
+
+# Local thinking data
+thinking_data/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 기획 문서 (public repo 노출 방지 — 공개해도 괜찮다면 이 두 줄 삭제)
+Want_to_Implement.pdf
+*.pdf
