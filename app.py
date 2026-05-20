@@ -420,54 +420,60 @@ def render_chat_history():
 
 
 def update_closure_and_stage(eval_result: dict):
-    """평가 결과로 closure 상태를 누적 갱신하고 단계 진행 결정."""
-    if not eval_result or "_error" in eval_result:
-        return
+    """평가 결과로 closure 상태를 누적 갱신하고 단계 진행 결정.
 
-    # 누적 갱신 — 한 번 true가 된 조건은 유지
-    for k in st.session_state.closure:
-        if eval_result.get(k):
-            st.session_state.closure[k] = True
+    평가자 호출이 실패했더라도 stage 진행 로직(floor 기반)은 여전히 돌아간다.
+    """
+    # 평가자 결과가 정상이면 closure/thinking_data 누적
+    eval_ok = bool(eval_result) and "_error" not in eval_result
 
-    # thinking_data 기록
-    if "thinking_data" in eval_result:
-        st.session_state.thinking_data.append(
-            {
-                "timestamp": datetime.now().isoformat(),
-                "stage_at_eval": st.session_state.current_stage,
-                "closure_snapshot": dict(st.session_state.closure),
-                "evaluator_reason": eval_result.get("reason", ""),
-                "data": eval_result["thinking_data"],
-            }
-        )
+    if eval_ok:
+        # 누적 갱신 — 한 번 true가 된 조건은 유지
+        for k in st.session_state.closure:
+            if eval_result.get(k):
+                st.session_state.closure[k] = True
 
-    st.session_state.last_eval = eval_result
+        # thinking_data 기록
+        if "thinking_data" in eval_result:
+            st.session_state.thinking_data.append(
+                {
+                    "timestamp": datetime.now().isoformat(),
+                    "stage_at_eval": st.session_state.current_stage,
+                    "closure_snapshot": dict(st.session_state.closure),
+                    "evaluator_reason": eval_result.get("reason", ""),
+                    "data": eval_result["thinking_data"],
+                }
+            )
 
-    # 단계 진행 로직 — 한 번에 한 단계씩만, 최소 턴 가드 충족 시
+        st.session_state.last_eval = eval_result
+
+    # 단계 진행 로직.
+    #
+    # 정책: STAGE_MIN_USER_TURNS = 각 단계에서 사용자가 머무는 user 턴 수의
+    # '정확한' 기준이다. 그만큼 응답하면 평가자의 advance 권고나 closure 충족
+    # 여부와 무관하게 다음 단계로 진행한다. 평가자는 더 이상 진행 게이트가
+    # 아니며, closure / thinking_data 누적 용도로만 쓰인다.
+    # (이전 버전은 floor 충족 + (advance OR closure_all)을 요구했는데, 강화된
+    # 평가자가 advance를 거의 추천하지 않아 학습자가 한 단계에 stuck 되는
+    # 문제가 발생했다.)
     cur_stage = st.session_state.current_stage
     cur_idx = STAGES.index(cur_stage)
     if cur_idx >= len(STAGES) - 1:
         return  # 이미 synthesis — 더 진행할 곳 없음
 
-    advance_recommended = eval_result.get("stage_advance_recommended", False)
-    closure_all_true = all(st.session_state.closure.values())
-
-    # 현재 단계의 최소 user 턴 가드
     user_turns_here = count_user_turns_in_stage(cur_stage)
     min_required = STAGE_MIN_USER_TURNS.get(cur_stage, 1)
     if user_turns_here < min_required:
-        # 충분히 머무르지 않음 — 진행 차단 (closure가 빨리 차도 무관)
-        return
+        return  # 아직 머물 시간
 
-    # 진행 결정 — 평가자 권고 OR closure 4조건 충족 (단, 항상 한 단계씩만)
-    if advance_recommended or closure_all_true:
-        next_stage = STAGES[cur_idx + 1]
-        st.session_state.current_stage = next_stage
-        if next_stage == "synthesis":
-            st.session_state.synthesis_pending = True
-            st.toast("🎉 마지막 단계 도달 — 사고 종합을 시작합니다")
-        else:
-            st.toast(f"➡️ 다음 단계: {STAGE_NAMES_KO[next_stage]}")
+    # floor 충족 — 한 단계 진행 (closure / advance와 무관)
+    next_stage = STAGES[cur_idx + 1]
+    st.session_state.current_stage = next_stage
+    if next_stage == "synthesis":
+        st.session_state.synthesis_pending = True
+        st.toast("🎉 마지막 단계 도달 — 사고 종합을 시작합니다")
+    else:
+        st.toast(f"➡️ 다음 단계: {STAGE_NAMES_KO[next_stage]}")
 
 
 def trigger_synthesis_if_pending(api_key: str, model: str, subject: str):
