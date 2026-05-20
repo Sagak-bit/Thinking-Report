@@ -21,7 +21,13 @@ try:
 except Exception:
     pass
 
-from prompts import CORE_PRINCIPLES, STAGE_PROMPTS, EVALUATOR_PROMPT
+from prompts import (
+    CORE_PRINCIPLES,
+    STAGE_PROMPTS,
+    EVALUATOR_PROMPT,
+    SYNTHESIS_EXTRACTOR_PROMPT,
+    FINAL_REPORT_COMPOSER_PROMPT,
+)
 from subjects import SUBJECT_FRAMEWORKS
 
 
@@ -78,6 +84,9 @@ def init_session():
         "started_at": datetime.now().isoformat(),
         "subject": "일반",
         "last_eval": None,
+        "synthesis_pending": False,   # synthesis 단계 진입 직후 자동 합성 트리거
+        "synthesis_report": None,     # 최종 마크다운 보고서
+        "synthesis_structure": None,  # 1단계에서 추출된 JSON 구조
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -180,6 +189,63 @@ def call_evaluator(client: OpenAI, model: str, conv_history: str, stage: str, su
         return {"_error": str(e)}
 
 
+def synthesize_session(client: OpenAI, model: str, subject: str, messages: list, thinking_data: list):
+    """
+    2단계 합성:
+    1) Synthesis Extractor — 전체 대화 + thinking_data를 구조화된 JSON으로 추출
+    2) Final Report Composer — 그 JSON을 입력으로 마크다운 보고서 작성
+    """
+    subj = SUBJECT_FRAMEWORKS[subject]
+
+    conversation = "\n\n".join(
+        f"[{m['role']}]\n{m['content']}" for m in messages
+    )
+    td_text = (
+        json.dumps(thinking_data, ensure_ascii=False, indent=2)
+        if thinking_data else "(평가자가 누적한 thinking_data가 비어 있음 — 대화 본문에 의존)"
+    )
+
+    # Stage 1: 구조화 추출
+    extractor_prompt = SYNTHESIS_EXTRACTOR_PROMPT.format(
+        subject=subject,
+        subject_focus=subj["thinking_focus"],
+        conversation=conversation,
+        thinking_data=td_text,
+    )
+    try:
+        ext_resp = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": extractor_prompt}],
+            temperature=0,
+            response_format={"type": "json_object"},
+        )
+        extracted = json.loads(ext_resp.choices[0].message.content)
+    except Exception as e:
+        extracted = {"_error": f"추출 단계 오류: {e}"}
+
+    # Stage 2: 최종 보고서 작성
+    recent_conv = "\n\n".join(
+        f"[{m['role']}]\n{m['content']}" for m in messages[-8:]
+    )
+    composer_prompt = FINAL_REPORT_COMPOSER_PROMPT.format(
+        extracted_structure=json.dumps(extracted, ensure_ascii=False, indent=2),
+        subject=subject,
+        subject_focus=subj["thinking_focus"],
+        recent_conversation=recent_conv,
+    )
+    try:
+        comp_resp = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": composer_prompt}],
+            temperature=0.5,
+        )
+        report = comp_resp.choices[0].message.content
+    except Exception as e:
+        report = f"⚠️ 보고서 작성 단계 오류: {e}"
+
+    return report, extracted
+
+
 # ============================================================
 # 사이드바
 # ============================================================
@@ -262,6 +328,7 @@ def render_sidebar():
                     "closure": st.session_state.closure,
                     "messages": st.session_state.messages,
                     "thinking_data": st.session_state.thinking_data,
+                    "synthesis_structure": st.session_state.synthesis_structure,
                 },
                 ensure_ascii=False,
                 indent=2,
@@ -273,6 +340,22 @@ def render_sidebar():
                 mime="application/json",
                 use_container_width=True,
             )
+
+        if st.session_state.synthesis_report:
+            st.download_button(
+                "⬇️ 종합 보고서 다운로드 (Markdown)",
+                data=st.session_state.synthesis_report.encode("utf-8"),
+                file_name=f"report_{st.session_state.session_id}.md",
+                mime="text/markdown",
+                use_container_width=True,
+            )
+
+        # 수동 재합성 — 사용자가 closure 4조건 충족 전이라도 강제로 종합 가능
+        if api_key and len(st.session_state.messages) >= 2 and not st.session_state.synthesis_pending:
+            if st.button("✨ 지금까지로 종합하기", use_container_width=True, help="현재 사고 과정 기준으로 합성 보고서를 강제 생성"):
+                st.session_state.synthesis_pending = True
+                st.session_state.current_stage = "synthesis"
+                st.rerun()
 
         st.divider()
         st.caption("Thinking-Enforced AI · v0.1")
@@ -303,7 +386,11 @@ def render_subject_panel(subject: str):
 def render_chat_history():
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+            if msg.get("is_synthesis"):
+                st.success("🎯 사고 종합 보고서 — 당신이 거친 사고 과정의 결과물입니다", icon="✨")
+                st.markdown(msg["content"])
+            else:
+                st.markdown(msg["content"])
 
 
 def update_closure_and_stage(eval_result: dict):
@@ -339,20 +426,72 @@ def update_closure_and_stage(eval_result: dict):
 
     # 4조건 모두 충족되면 무조건 synthesis로 점프
     if all(st.session_state.closure.values()):
-        st.session_state.current_stage = "synthesis"
-        st.toast("🎉 Cognitive Closure 4조건 충족 — Synthesis 단계로 진입")
+        if st.session_state.current_stage != "synthesis":
+            st.session_state.current_stage = "synthesis"
+            st.session_state.synthesis_pending = True  # 자동 합성 트리거
+            st.toast("🎉 Cognitive Closure 4조건 충족 — 사고 종합을 시작합니다")
         return
 
     if advance:
-        st.session_state.current_stage = STAGES[cur_idx + 1]
-        st.toast(f"➡️ 다음 단계: {STAGE_NAMES_KO[st.session_state.current_stage]}")
+        next_stage = STAGES[cur_idx + 1]
+        st.session_state.current_stage = next_stage
+        if next_stage == "synthesis":
+            st.session_state.synthesis_pending = True  # 평가자 권고로 synthesis 진입
+            st.toast("🎉 사고 종합을 시작합니다")
+        else:
+            st.toast(f"➡️ 다음 단계: {STAGE_NAMES_KO[next_stage]}")
+
+
+def trigger_synthesis_if_pending(api_key: str, model: str, subject: str):
+    """4조건 충족 직후 자동으로 종합 보고서 생성."""
+    if not st.session_state.synthesis_pending:
+        return
+    if not api_key:
+        return
+
+    client = OpenAI(api_key=api_key)
+
+    with st.chat_message("assistant"):
+        with st.status("🧠 사고 과정을 종합하는 중…", expanded=True) as status:
+            st.write("1/2 단계: 대화에서 사고 구조 추출 중…")
+            report, extracted = synthesize_session(
+                client,
+                model,
+                subject,
+                st.session_state.messages,
+                st.session_state.thinking_data,
+            )
+            st.write("2/2 단계: 최종 정리물 작성 완료")
+            status.update(label="✅ 종합 완료", state="complete", expanded=False)
+        st.markdown(report)
+
+    # 메시지로 영구 저장 + 상태 갱신
+    st.session_state.messages.append({
+        "role": "assistant",
+        "content": report,
+        "is_synthesis": True,
+    })
+    st.session_state.synthesis_report = report
+    st.session_state.synthesis_structure = extracted
+    st.session_state.synthesis_pending = False
+    st.rerun()
 
 
 def render_chat(api_key: str, model: str, subject: str):
-    user_input = st.chat_input(
-        "다루고 싶은 문제나 응답을 입력하세요…",
-        disabled=not api_key,
+    # synthesis_pending 플래그가 켜져있으면 사용자 입력 없이 자동 합성
+    if st.session_state.synthesis_pending and api_key:
+        trigger_synthesis_if_pending(api_key, model, subject)
+        return
+
+    # Synthesis 단계인 경우 입력 placeholder를 변경
+    is_synth_stage = st.session_state.current_stage == "synthesis"
+    placeholder = (
+        "종합이 끝났어요. 보고서에 대해 더 묻거나 후속 질문을 입력하세요…"
+        if is_synth_stage else
+        "다루고 싶은 문제나 응답을 입력하세요…"
     )
+
+    user_input = st.chat_input(placeholder, disabled=not api_key)
 
     if not api_key:
         st.info("👈 사이드바에서 OpenAI API Key를 입력해주세요.")
