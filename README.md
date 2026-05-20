@@ -1,5 +1,7 @@
 # Thinking-Enforced AI
 
+[![Deploy on Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io)
+
 > "AI를 막는 것이 아니라, 인간의 사고 과정을 보존한다."
 >
 > 청소년 사용자가 AI에 정답을 외주하지 않고 스스로 사고하도록 강제하는 AI 사고 코치.
