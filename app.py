@@ -69,6 +69,10 @@ STAGE_MIN_USER_TURNS = {
 
 DATA_DIR = Path("thinking_data")
 
+# 고정 모델 — instruction following 품질을 위해 gpt-4o로 강제.
+# 변경하려면 이 값만 바꿔주세요.
+MODEL = "gpt-4o"
+
 # Streamlit Cloud 등 컨테이너 환경 감지 (filesystem이 ephemeral 함)
 IS_CLOUD = bool(os.getenv("STREAMLIT_RUNTIME_CLOUD") or os.getenv("HOSTNAME", "").startswith("streamlit"))
 
@@ -302,12 +306,7 @@ def render_sidebar():
                 help="sk-... 로 시작하는 키. 브라우저 세션에만 저장됩니다.",
             )
 
-        model = st.radio(
-            "모델 선택",
-            ["gpt-4o-mini", "gpt-4o"],
-            index=0,
-            help="gpt-4o-mini: 저렴하고 빠름 / gpt-4o: 반례·메타인지 피드백 품질이 더 좋음",
-        )
+        st.caption(f"🤖 모델: `{MODEL}` (고정)")
 
         subject = st.selectbox(
             "과목 / 사고 프레임",
@@ -381,7 +380,7 @@ def render_sidebar():
         st.caption("Thinking-Enforced AI · v0.1")
         st.caption("기반: Want_to_Implement.pdf")
 
-    return api_key, model, subject
+    return api_key, subject
 
 
 # ============================================================
@@ -598,7 +597,7 @@ def main():
     )
 
     init_session()
-    api_key, model, subject = render_sidebar()
+    api_key, subject = render_sidebar()
 
     st.title("🧠 Thinking-Enforced AI")
     st.caption(
@@ -610,7 +609,7 @@ def main():
     render_subject_panel(subject)
     render_chat_history()
     render_last_eval_panel()
-    render_chat(api_key, model, subject)
+    render_chat(api_key, MODEL, subject)
 
 
 if __name__ == "__main__":
