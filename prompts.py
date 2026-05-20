@@ -190,18 +190,35 @@ STAGE_PROMPTS = {
 
 
 SYNTHESIS_EXTRACTOR_PROMPT = """당신은 학습자의 사고 흐름을 분석하는 'Thinking Synthesizer (사고 추출자)'입니다.
-사용자와 사고 코치 AI 간의 전체 대화를 분석하여, 학습자가 실제로 거친 사고 구조를 JSON으로 추출하세요.
+사용자와 사고 코치 AI 간의 전체 대화를 분석하여, 학습자가 **실제로** 거친 사고 구조를 JSON으로 추출하세요.
+
+【핵심 원칙 — 출처 구분】
+
+이 추출은 사용자의 사고를 정리하기 위한 것입니다. 따라서 다음 출처 룰을 엄격히 지키세요:
+
+- `reframed_problem`, `initial_hypothesis`, `key_evidence`, `thought_revisions`,
+  `final_position`, `concrete_data_provided` — 이 필드들은 **오직 [user] role 발화에서만** 추출합니다.
+  코치가 던진 정량 반례(예: "공기저항 0.5%", "렌즈 왜곡 1%")는 사용자가 명시적으로 받아들이거나
+  자기 언어로 재진술하지 않는 한 절대 사용자 데이터로 포함하지 마세요.
+- `counter_perspectives_explored`는 [assistant] 코치가 제시한 반례 중 사용자가 **실제로 응답·검토한 것**만 포함.
+  사용자가 무시한 반례는 제외.
+- `thinking_pattern_observations`, `missed_perspectives`는 평가자 시각이므로 양쪽 발화 모두 참고 가능.
+
+【비어있음은 비어있는 그대로】
+
+사용자가 가설을 제시하지 않았으면 `initial_hypothesis`는 빈 문자열로 두세요. 코치가 던진 가설을
+사용자 가설인 것처럼 채우지 마세요. 동일 룰이 모든 필드에 적용됩니다.
 
 [과목·사고 프레임]
 {subject}: {subject_focus}
 
-[전체 대화 기록]
+[전체 대화 기록 — [user]와 [assistant] 라벨에 주의]
 {conversation}
 
 [누적된 Thinking Data 로그]
 {thinking_data}
 
-다음 JSON 구조로 정확히 응답하세요. 누락된 항목은 빈 문자열 또는 빈 배열로 두되, 가능한 한 풍부하게 채우세요:
+다음 JSON 구조로 정확히 응답하세요. 누락된 항목은 빈 문자열 또는 빈 배열로 두되, 사용자가 제공한 만큼 채우세요:
 
 {{
   "original_request": "사용자의 최초 요청·문제를 한 문장으로",
@@ -216,10 +233,35 @@ SYNTHESIS_EXTRACTOR_PROMPT = """당신은 학습자의 사고 흐름을 분석�
   "thinking_pattern_observations": "학습자의 사고 패턴에 대한 1-2문장 평가 (예: 처음엔 단일 관점이었으나 반례 제시 후 사고를 확장함)",
   "key_concepts_touched": ["대화에서 다룬 핵심 개념·이론·용어들", "..."],
   "original_deliverable_type": "사용자가 원래 원했던 결과물의 형태 (보고서/풀이/해석/논증/계획 등)",
-  "concrete_data_provided": ["사용자가 대화 중 제공한 실제 수치·데이터·인용·계산", "..."],
-  "data_sufficiency_for_deliverable": "sufficient | partial | insufficient — 사용자가 제공한 구체 데이터가 원래 원한 결과물(보고서/풀이/해석)을 실제로 작성하기에 충분한가",
+  "concrete_data_provided": ["[user] 발화에서만 추출한 실제 수치·데이터·인용·계산. 코치가 제시한 정량 정보는 사용자가 받아들여 재진술하지 않은 한 제외", "..."],
+  "data_sufficiency_for_deliverable": "sufficient | partial | insufficient",
   "missing_concrete_inputs": ["결과물 작성에 추가로 필요한 구체적 자료·수치·인용 (insufficient/partial인 경우에만 채움)", "..."]
 }}
+
+【data_sufficiency_for_deliverable 판정 강제 룰】
+
+다음 룰을 위에서부터 순서대로 적용. 조건이 맞으면 그 값으로 확정하고 더 내려가지 마세요.
+
+1. **insufficient (자동)** — 다음 중 하나라도 충족:
+   - `reframed_problem` 이 빈 문자열
+   - `initial_hypothesis` 가 빈 문자열
+   - `final_position` 이 빈 문자열
+   - `thought_revisions` 가 빈 배열 AND `key_evidence` 가 빈 배열
+   - `concrete_data_provided` 가 빈 배열 (deliverable_type이 "보고서/실험 보고서/풀이/해석" 등 실물 결과물인 경우)
+
+   → 이런 상태에서는 합성기가 결과물 본문을 만들 수 없으며,
+     사용자에게 자료 수집 안내만 줘야 합니다.
+
+2. **partial** — 위 1번 조건은 모두 통과하지만:
+   - `concrete_data_provided` 의 항목 수가 deliverable_type 작성에 분명히 부족
+   - 또는 일부 핵심 사고 단계(가설/검증/결론 중 하나)가 약함
+
+3. **sufficient** — 위 1·2번 모두 통과:
+   - reframed_problem · initial_hypothesis · final_position 채워짐
+   - thought_revisions 또는 강한 key_evidence 존재
+   - concrete_data_provided 가 deliverable_type 작성에 충분한 풍부도
+
+이 룰은 보수적으로 — 의심스러우면 한 단계 아래로(예: partial보다 insufficient).
 
 다른 텍스트 없이 JSON만 출력하세요.
 """
