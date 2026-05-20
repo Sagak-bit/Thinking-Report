@@ -31,26 +31,91 @@ COLORS = {
 
 CSS = """
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" as="style" crossorigin
       href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css">
+<!-- Material Symbols 폰트 — Streamlit 내부 아이콘이 깨지지 않도록 명시 로드 -->
+<link rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0">
+<link rel="stylesheet"
+      href="https://fonts.googleapis.com/icon?family=Material+Icons|Material+Icons+Outlined">
 
 <style>
 /* ============================================================
    Global typography
+   - body에만 폰트 지정해서 자식이 자연 상속받게 한다.
+   - [class*="st-"] 같은 광범위 selector는 Material Symbols 아이콘
+     폰트까지 덮어써서 'keyboard_double_arrow_left' 같은 raw text가
+     보이게 만든다. 그래서 selector를 좁힌다.
+   - 이모지 fallback도 chain에 추가.
    ============================================================ */
-html, body, [class*="css"], [class*="st-"] {
-    font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont,
-                 system-ui, Roboto, 'Apple SD Gothic Neo', 'Noto Sans KR',
-                 'Segoe UI', sans-serif !important;
+:root {
+    --tea-font-sans:
+        'Pretendard Variable', Pretendard,
+        -apple-system, BlinkMacSystemFont, system-ui, Roboto,
+        'Apple SD Gothic Neo', 'Noto Sans KR', 'Segoe UI',
+        'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
+        'Noto Color Emoji', sans-serif;
+}
+
+html, body {
+    font-family: var(--tea-font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     color: #191F28;
 }
 
+/* Streamlit이 자체 selector로 폰트를 강제하는 텍스트 영역만 명시적으로 덮어쓴다. */
+.stApp,
+.stMarkdown, .stMarkdown p, .stMarkdown li,
+.stChatMessageContent, .stChatInput textarea,
+.stTextInput input, .stTextArea textarea, .stSelectbox,
+.stButton button, .stDownloadButton button,
+[data-testid="stMarkdownContainer"],
+[data-testid="stCaptionContainer"],
+[data-testid="stChatMessageContent"] {
+    font-family: var(--tea-font-sans);
+}
+
 h1, h2, h3, h4, h5, h6 {
+    font-family: var(--tea-font-sans);
     font-weight: 700 !important;
     letter-spacing: -0.022em !important;
     color: #191F28 !important;
+}
+
+/* ============================================================
+   Material Symbols / Icons — 폰트 보호
+   Streamlit 사이드바 collapse 버튼, expander caret, 알림 아이콘 등이
+   Material Symbols 폰트를 쓰는데, 폰트가 안 잡히면 아이콘 이름이 raw
+   text(예: "keyboard_double_arrow_left")로 노출된다.
+   아래 selector들은 그 요소들의 폰트를 보호한다.
+   ============================================================ */
+.material-icons,
+.material-icons-outlined,
+.material-symbols-outlined,
+.material-symbols-rounded,
+.material-symbols-sharp,
+span.material-symbols-outlined,
+[class*="material-icons"],
+[class*="material-symbols"],
+[data-testid*="Icon"] svg,
+[data-testid*="icon"] svg {
+    font-family: 'Material Symbols Outlined', 'Material Symbols Rounded',
+                 'Material Icons Outlined', 'Material Icons' !important;
+    font-weight: normal !important;
+    font-style: normal !important;
+    font-size: inherit;
+    line-height: 1 !important;
+    letter-spacing: normal !important;
+    text-transform: none !important;
+    display: inline-block;
+    white-space: nowrap;
+    word-wrap: normal;
+    direction: ltr;
+    -webkit-font-feature-settings: 'liga';
+    -webkit-font-smoothing: antialiased;
 }
 
 h1 { font-size: 2rem !important; line-height: 1.25 !important; }
