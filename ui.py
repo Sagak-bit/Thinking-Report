@@ -227,10 +227,29 @@ div[data-testid="stChatInput"] {
     border-radius: 16px !important;
     background-color: #FFFFFF !important;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+    position: relative !important; /* button absolute 기준점 */
 }
 div[data-testid="stChatInput"]:focus-within {
     border-color: #3182F6 !important;
     box-shadow: 0 0 0 3px rgba(49, 130, 246, 0.12) !important;
+}
+
+/* Send button — multi-line 확장 시 우측 하단 고정.
+   기본 Streamlit 동작은 align-items: stretch 라 textarea가 늘어나면
+   button 위치가 따라 흔들리는 문제. 명시적 anchor 처리. */
+div[data-testid="stChatInput"] button {
+    position: absolute !important;
+    right: 8px !important;
+    bottom: 8px !important;
+    margin: 0 !important;
+    flex-shrink: 0 !important;
+    align-self: flex-end !important;
+    z-index: 2;
+}
+/* textarea 글자가 send button 뒤로 안 가도록 우측 여백 확보 */
+div[data-testid="stChatInput"] textarea {
+    padding-right: 52px !important;
+    min-height: 44px !important;
 }
 
 /* ============================================================
