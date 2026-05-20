@@ -258,24 +258,93 @@ FINAL_REPORT_COMPOSER_PROMPT = """당신은 학습자가 거친 사고 과정을
  "처음에는 ___이라 생각했지만, ___라는 반례를 검토하면서 ___로 시각이 바뀌었습니다" 형태로)
 
 ## 🎯 당신이 도달한 결론
-**[가장 중요한 섹션 — data_sufficiency_for_deliverable 값에 따라 분기]**
+**[가장 중요한 섹션 — original_deliverable_type 의 정형 형식을 따른다]**
 
-▷ **data_sufficiency_for_deliverable == "sufficient"** 인 경우:
-  - 학습자가 제공한 concrete_data_provided를 활용해 original_deliverable_type 형태의 완성된 결과물을 작성한다.
-    - 보고서: 서론·본론·결론, 충분한 분량
-    - 풀이: 단계별 풀이 + 핵심 원리 설명 + 최종 답
-    - 해석: 텍스트 근거 인용과 함께 해석 본문
-  - "학습자가 도달한 것"이라는 표현을 섞되, 실제로 완성된 결과물을 제공한다.
+이 섹션은 학습자가 원래 원했던 결과물의 **정형 형식**을 그대로 따른다.
+사고 회고 형식(이 섹션의 다른 부분처럼)이 아니라, 실제 제출 가능한 실물 결과물이어야 한다.
 
-▷ **data_sufficiency_for_deliverable == "partial"** 인 경우:
-  - 제공된 데이터로 가능한 부분만 작성하고, 나머지는 명시적으로 "여기에 ___ 데이터가 들어가야 합니다" 처럼 placeholder 로 표시한다.
-  - 마지막에 "이 결과물을 완성하려면 다음이 필요합니다:" 소제목으로 missing_concrete_inputs 를 나열.
+deliverable_type 에 따라 다음 소제목(####) 구조를 정확히 사용한다:
 
-▷ **data_sufficiency_for_deliverable == "insufficient"** 인 경우:
-  - 결과물을 만들지 않는다. 대신 정직하게:
-    "이 사고 과정만으로는 ___(deliverable_type)을 실제로 작성하기에 충분한 자료가 모이지 않았어요. 당신이 가진 사고 틀은 매우 단단한 만큼, 이제 다음 자료들을 모으면 곧장 결과물을 작성할 수 있습니다:"
-    그리고 missing_concrete_inputs 를 친절한 체크리스트로 제시.
-  - 이 분기는 학습자에 대한 비난이 아니라, 사고 과정과 자료 수집을 분리해서 인식하게 하는 것이 목적임을 톤에 반영한다.
+▷ **"보고서" / "실험 보고서" / "분석 보고서" / "연구 보고서"**:
+
+  #### 1. 서론 (Introduction)
+  실험·연구의 목적·배경·의의를 한 단락으로. reframed_problem 풀어 서술.
+
+  #### 2. 실험 방법 / 분석 방법 (Methods)
+  학습자가 제공한 측정 환경·장비·절차·접근 방식. concrete_data_provided 활용.
+
+  #### 3. 결과 (Results)
+  측정값·계산 결과·표·수치. concrete_data_provided 인용. 가능하면 표·리스트 형태.
+
+  #### 4. 논의 (Discussion)
+  사용자의 사고 흐름(초기 가설 → 검토한 반례 → 사고 수정 → 최종 입장)을 정리.
+  결과 해석, 오차·한계 분석, counter_perspectives_explored / thought_revisions 활용.
+
+  #### 5. 결론 (Conclusion)
+  final_position 명확화 + 다음 단계 제언.
+
+▷ **"풀이" / "문제 풀이" / "솔루션"**:
+
+  #### 1. 문제 재정의
+  reframed_problem
+
+  #### 2. 풀이 전략
+  학습자가 택한 접근 방식과 그 근거
+
+  #### 3. 단계별 풀이
+  각 단계 + 사용된 정의·공식·원리. 수식이 있으면 LaTeX 또는 명료한 표기.
+
+  #### 4. 검산 / 한계 확인
+  counter_perspectives_explored 활용. 반례·특수 케이스 확인.
+
+  #### 5. 최종 답
+
+▷ **"해석" / "비평" / "비판적 분석" / "독해"**:
+
+  #### 1. 해석 대상의 핵심
+  reframed_problem
+
+  #### 2. 주요 해석 — 근거 인용
+  텍스트의 구체적 부분 인용 + 학습자의 해석.
+
+  #### 3. 대안 해석 검토
+  counter_perspectives_explored — 다른 가능한 읽기, 그것을 받아들이지 않은 이유.
+
+  #### 4. 종합 해석
+  final_position. 학습자의 최종 입장과 그 사회·문화·텍스트적 함의.
+
+▷ **"논증" / "에세이" / "논설" / "의견서"**:
+
+  #### 1. 주장 (Thesis)
+  final_position 한 문장.
+
+  #### 2. 핵심 근거
+  key_evidence 정리.
+
+  #### 3. 예상 반론과 재반박
+  counter_perspectives_explored + thought_revisions 활용.
+
+  #### 4. 결론
+
+▷ **기타 (계획서·제안서·요약 등)**:
+  자유 형식이되 최소 3개 #### 소제목 구조를 유지. 회고가 아닌 실물 형식으로.
+
+【data_sufficiency 처리】
+
+- **sufficient**: 위 정형 구조를 완전히 채운다. 모든 #### 소제목 아래 충분한 분량.
+- **partial**: 정형 구조와 모든 소제목은 그대로 유지하되, 데이터 부족 섹션 본문에
+  `[이 부분 완성을 위해 추가로 필요: ___]` 형태로 명시한 placeholder 한 줄을 그 자리에 둔다.
+  결론 섹션 마지막에 별도로 다음 블록을 추가:
+
+  **이 결과물을 완성하려면 다음이 필요합니다:**
+  - [ ] (missing_concrete_inputs 항목들을 체크리스트로)
+
+- **insufficient**: 정형 결과물을 작성하지 않고, 대신 다음 문장으로 시작:
+
+  "이 사고 과정만으로는 [deliverable_type]을 실제 결과물로 완성하기에 자료가 부족해요.
+  당신이 가진 사고 틀은 단단하니, 이제 다음 자료를 모으면 곧장 작성에 들어갈 수 있어요:"
+
+  뒤에 missing_concrete_inputs 체크리스트. 톤은 학습자에 대한 비난이 아니라 사고와 자료 수집을 분리해 인식하게 하는 안내.
 
 ## 🔍 사고 과정에서 얻은 통찰
 (thinking_pattern_observations + key_concepts_touched를 활용해 학습자가 이 과정에서 배운 점)
