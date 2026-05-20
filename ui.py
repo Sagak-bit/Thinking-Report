@@ -204,9 +204,9 @@ section[data-testid="stSidebar"] h3 {
 }
 
 /* ============================================================
-   Inputs / Textareas
+   Inputs / Textareas (일반 입력 — chat input은 별도 처리)
    ============================================================ */
-.stTextInput input, .stTextArea textarea, .stChatInput textarea {
+.stTextInput input, .stTextArea textarea {
     border-radius: 12px !important;
     border: 1px solid #E5E8EB !important;
     padding: 10px 14px !important;
@@ -214,42 +214,66 @@ section[data-testid="stSidebar"] h3 {
     background-color: #FFFFFF !important;
     transition: border-color 0.15s, box-shadow 0.15s !important;
 }
-.stTextInput input:focus, .stTextArea textarea:focus,
-.stChatInput textarea:focus {
+.stTextInput input:focus, .stTextArea textarea:focus {
     border-color: #3182F6 !important;
     box-shadow: 0 0 0 3px rgba(49, 130, 246, 0.12) !important;
     outline: none !important;
 }
 
-/* Chat input container */
+/* ============================================================
+   Chat input — 외곽 컨테이너만 border, 내부 textarea는 투명
+   (이전엔 textarea가 border를 또 가져서 이중 박스로 보였음)
+   ============================================================ */
 div[data-testid="stChatInput"] {
     border: 1px solid #E5E8EB !important;
     border-radius: 16px !important;
     background-color: #FFFFFF !important;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
-    position: relative !important; /* button absolute 기준점 */
+    position: relative !important;
+    padding: 0 !important;
 }
 div[data-testid="stChatInput"]:focus-within {
     border-color: #3182F6 !important;
     box-shadow: 0 0 0 3px rgba(49, 130, 246, 0.12) !important;
 }
 
-/* Send button — multi-line 확장 시 우측 하단 고정.
-   기본 Streamlit 동작은 align-items: stretch 라 textarea가 늘어나면
-   button 위치가 따라 흔들리는 문제. 명시적 anchor 처리. */
+/* 내부 wrapper들 — 자체 padding/border 제거 */
+div[data-testid="stChatInput"] > div,
+div[data-testid="stChatInput"] > div > div {
+    padding: 0 !important;
+    background-color: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* textarea 자체 — 외곽이 border를 가지므로 본인은 평탄 */
+div[data-testid="stChatInput"] textarea,
+div[data-testid="stChatInputTextArea"] {
+    border: none !important;
+    outline: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 14px 56px 14px 18px !important;
+    font-size: 0.95rem !important;
+    min-height: 50px !important;
+    resize: none !important;
+}
+div[data-testid="stChatInput"] textarea:focus,
+div[data-testid="stChatInputTextArea"]:focus {
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+/* Send button — 우측 하단 고정. textarea가 multi-line으로
+   늘어나도 위치 흔들리지 않도록 absolute 처리. */
 div[data-testid="stChatInput"] button {
     position: absolute !important;
     right: 8px !important;
     bottom: 8px !important;
     margin: 0 !important;
     flex-shrink: 0 !important;
-    align-self: flex-end !important;
     z-index: 2;
-}
-/* textarea 글자가 send button 뒤로 안 가도록 우측 여백 확보 */
-div[data-testid="stChatInput"] textarea {
-    padding-right: 52px !important;
-    min-height: 44px !important;
 }
 
 /* ============================================================
