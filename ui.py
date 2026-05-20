@@ -221,9 +221,12 @@ section[data-testid="stSidebar"] h3 {
 }
 
 /* ============================================================
-   Chat input — 외곽 컨테이너만 border, 내부 textarea는 투명
-   (이전엔 textarea가 border를 또 가져서 이중 박스로 보였음)
+   Chat input — 외곽 컨테이너만 시각적 박스, 모든 자손 wrapper와
+   textarea는 완전 투명. 이전엔 깊은 wrapper 단계가 있어 자체
+   배경/보더를 유지해 박스 안에 박스가 보였음.
    ============================================================ */
+
+/* 외곽 컨테이너 — 유일하게 시각적 박스 */
 div[data-testid="stChatInput"] {
     border: 1px solid #E5E8EB !important;
     border-radius: 16px !important;
@@ -237,43 +240,91 @@ div[data-testid="stChatInput"]:focus-within {
     box-shadow: 0 0 0 3px rgba(49, 130, 246, 0.12) !important;
 }
 
-/* 내부 wrapper들 — 자체 padding/border 제거 */
-div[data-testid="stChatInput"] > div,
-div[data-testid="stChatInput"] > div > div {
-    padding: 0 !important;
+/* 모든 자손 wrapper (button/svg/path 제외) — 완전 투명·평탄.
+   Streamlit이 emotion으로 만드는 임의 className을 모두 캐치. */
+div[data-testid="stChatInput"] div,
+div[data-testid="stChatInput"] form,
+div[data-testid="stChatInput"] section,
+div[data-testid="stChatInput"] label,
+div[data-testid="stChatInput"] > *:not(button):not(textarea) {
+    background: transparent !important;
     background-color: transparent !important;
     border: none !important;
     box-shadow: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
 }
 
-/* textarea 자체 — 외곽이 border를 가지므로 본인은 평탄 */
+/* textarea 본인 — 시각적으로 완전 평탄, 내용 영역만 가짐.
+   우측 padding 56px이 send button 자리. */
 div[data-testid="stChatInput"] textarea,
-div[data-testid="stChatInputTextArea"] {
+div[data-testid="stChatInputTextArea"],
+[data-testid="stChatInputTextArea"] {
     border: none !important;
     outline: none !important;
     background: transparent !important;
+    background-color: transparent !important;
     box-shadow: none !important;
     padding: 14px 56px 14px 18px !important;
     font-size: 0.95rem !important;
-    min-height: 50px !important;
+    line-height: 1.5 !important;
+    min-height: 52px !important;
     resize: none !important;
+    border-radius: 0 !important;
+    color: #191F28 !important;
 }
 div[data-testid="stChatInput"] textarea:focus,
-div[data-testid="stChatInputTextArea"]:focus {
+div[data-testid="stChatInputTextArea"]:focus,
+[data-testid="stChatInputTextArea"]:focus {
     border: none !important;
     outline: none !important;
     box-shadow: none !important;
 }
 
-/* Send button — 우측 하단 고정. textarea가 multi-line으로
-   늘어나도 위치 흔들리지 않도록 absolute 처리. */
-div[data-testid="stChatInput"] button {
+/* Send button — 우측 하단 absolute. 평탄화 룰을 다시 깨고
+   자기 시각적 스타일을 명시. */
+div[data-testid="stChatInput"] button,
+div[data-testid="stChatInputSubmitButton"],
+[data-testid="stChatInputSubmitButton"] {
     position: absolute !important;
     right: 8px !important;
     bottom: 8px !important;
     margin: 0 !important;
+    padding: 0 !important;
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
     flex-shrink: 0 !important;
-    z-index: 2;
+    z-index: 2 !important;
+    background-color: #3182F6 !important;
+    background: #3182F6 !important;
+    border: none !important;
+    border-radius: 10px !important;
+    color: #FFFFFF !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    transition: background-color 0.15s !important;
+}
+div[data-testid="stChatInput"] button:hover,
+div[data-testid="stChatInputSubmitButton"]:hover,
+[data-testid="stChatInputSubmitButton"]:hover {
+    background-color: #1B64DA !important;
+    background: #1B64DA !important;
+}
+div[data-testid="stChatInput"] button:disabled,
+div[data-testid="stChatInputSubmitButton"]:disabled {
+    background-color: #D5D9DC !important;
+    background: #D5D9DC !important;
+    cursor: not-allowed !important;
+}
+/* Send button 안의 아이콘 흰색 강제 */
+div[data-testid="stChatInput"] button svg,
+div[data-testid="stChatInputSubmitButton"] svg {
+    color: #FFFFFF !important;
+    fill: #FFFFFF !important;
 }
 
 /* ============================================================
