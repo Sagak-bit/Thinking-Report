@@ -29,6 +29,15 @@ from prompts import (
     FINAL_REPORT_COMPOSER_PROMPT,
 )
 from subjects import SUBJECT_FRAMEWORKS
+from ui import (
+    inject_css,
+    render_hero,
+    render_stepper,
+    render_stage_card,
+    render_closure_grid,
+    render_section_heading,
+    render_synthesis_banner,
+)
 
 
 # ============================================================
@@ -48,6 +57,15 @@ STAGE_NAMES_KO = {
     "thinking_construction": "3단계: Thinking Construction (가설 구축)",
     "reflective_feedback": "4단계: Reflective Feedback (성찰 피드백)",
     "synthesis": "5단계: Synthesis (종합)",
+}
+
+# stepper 노드 아래 짧은 라벨 (한국어 한 단어)
+STAGE_SHORT_LABELS = {
+    "problem_framing": "문제 재정의",
+    "exploration": "탐색",
+    "thinking_construction": "가설 구축",
+    "reflective_feedback": "성찰",
+    "synthesis": "종합",
 }
 
 CLOSURE_LABELS = {
@@ -275,17 +293,16 @@ def synthesize_session(client: OpenAI, model: str, subject: str, messages: list,
 # ============================================================
 def render_sidebar():
     with st.sidebar:
-        st.title("⚙️ 설정")
-
-        # 1) Streamlit Secrets > 2) 환경변수 > 3) 사용자 직접 입력
+        # ── API Key ─────────────────────────────────────────────
+        render_section_heading("API")
         secret_key = get_api_key_from_secrets()
         env_key = os.getenv("OPENAI_API_KEY", "")
         preset_key = secret_key or env_key
 
         if preset_key:
-            st.success("🔐 API Key가 자동으로 로드되었습니다.")
+            st.success("API Key가 자동으로 로드되었습니다", icon="🔐")
             override = st.checkbox(
-                "내 OpenAI API Key 직접 사용",
+                "내 API Key 직접 사용",
                 value=False,
                 help="체크하면 운영자 키 대신 본인의 키를 사용합니다.",
             )
@@ -294,7 +311,9 @@ def render_sidebar():
                     "OpenAI API Key",
                     type="password",
                     value="",
-                    help="sk-... 로 시작하는 키. 브라우저 세션에만 저장됩니다.",
+                    placeholder="sk-...",
+                    label_visibility="collapsed",
+                    help="브라우저 세션에만 저장됩니다.",
                 )
             else:
                 api_key = preset_key
@@ -303,41 +322,51 @@ def render_sidebar():
                 "OpenAI API Key",
                 type="password",
                 value="",
-                help="sk-... 로 시작하는 키. 브라우저 세션에만 저장됩니다.",
+                placeholder="sk-...",
+                label_visibility="collapsed",
+                help="브라우저 세션에만 저장됩니다.",
             )
 
-        st.caption(f"🤖 모델: `{MODEL}` (고정)")
+        st.caption(f"모델 · `{MODEL}`")
 
+        # ── Subject ─────────────────────────────────────────────
+        render_section_heading("사고 프레임")
         subject = st.selectbox(
-            "과목 / 사고 프레임",
+            "사고 프레임",
             list(SUBJECT_FRAMEWORKS.keys()),
             index=list(SUBJECT_FRAMEWORKS.keys()).index(st.session_state.subject),
+            label_visibility="collapsed",
         )
         st.session_state.subject = subject
 
-        st.divider()
-        st.subheader("🧠 Cognitive Closure")
-        st.caption("4조건이 모두 충족되면 Synthesis 단계로 자동 진입")
-        for k, label in CLOSURE_LABELS.items():
-            mark = "✅" if st.session_state.closure[k] else "⬜"
-            st.markdown(f"{mark} {label}")
+        # ── Cognitive Closure ───────────────────────────────────
+        render_section_heading("Cognitive Closure")
+        st.caption("4조건이 충족되면 종합 보고서 단계로 진입")
+        render_closure_grid(CLOSURE_LABELS, st.session_state.closure)
 
-        st.divider()
+        # ── Session controls ────────────────────────────────────
+        render_section_heading("세션")
         col_a, col_b = st.columns(2)
         with col_a:
-            if st.button("🔄 새 세션", use_container_width=True):
+            if st.button("새 세션", use_container_width=True):
                 reset_session()
                 st.rerun()
         with col_b:
-            save_label = "⬇️ JSON" if IS_CLOUD else "💾 저장"
+            save_label = "JSON" if IS_CLOUD else "저장"
             if st.button(save_label, use_container_width=True, disabled=IS_CLOUD):
                 path = save_session()
                 st.success(f"저장: {path.name}")
 
         if IS_CLOUD:
-            st.caption("☁️ 클라우드 환경 — 로컬 저장은 비활성. 아래 다운로드를 사용하세요.")
+            st.caption("☁️ 클라우드 환경 · 로컬 저장은 비활성")
 
-        if st.session_state.messages:
+        # ── Downloads ───────────────────────────────────────────
+        has_data_download = bool(st.session_state.messages)
+        has_report_download = bool(st.session_state.synthesis_report)
+        if has_data_download or has_report_download:
+            render_section_heading("다운로드")
+
+        if has_data_download:
             data_bytes = json.dumps(
                 {
                     "session_id": st.session_state.session_id,
@@ -353,32 +382,42 @@ def render_sidebar():
                 indent=2,
             ).encode("utf-8")
             st.download_button(
-                "⬇️ Thinking Data 다운로드 (JSON)",
+                "Thinking Data (JSON)",
                 data=data_bytes,
                 file_name=f"thinking_{st.session_state.session_id}.json",
                 mime="application/json",
                 use_container_width=True,
+                icon="📊",
             )
 
-        if st.session_state.synthesis_report:
+        if has_report_download:
             st.download_button(
-                "⬇️ 종합 보고서 다운로드 (Markdown)",
+                "종합 보고서 (Markdown)",
                 data=st.session_state.synthesis_report.encode("utf-8"),
                 file_name=f"report_{st.session_state.session_id}.md",
                 mime="text/markdown",
                 use_container_width=True,
+                icon="📄",
             )
 
-        # 수동 재합성 — 사용자가 closure 4조건 충족 전이라도 강제로 종합 가능
+        # 수동 재합성
         if api_key and len(st.session_state.messages) >= 2 and not st.session_state.synthesis_pending:
-            if st.button("✨ 지금까지로 종합하기", use_container_width=True, help="현재 사고 과정 기준으로 합성 보고서를 강제 생성"):
+            render_section_heading("강제 종합")
+            if st.button(
+                "지금까지로 종합하기",
+                use_container_width=True,
+                help="현재 사고 과정 기준으로 합성 보고서를 강제 생성",
+                icon="✨",
+            ):
                 st.session_state.synthesis_pending = True
                 st.session_state.current_stage = "synthesis"
                 st.rerun()
 
-        st.divider()
-        st.caption("Thinking-Enforced AI · v0.1")
-        st.caption("기반: Want_to_Implement.pdf")
+        # ── Footer ──────────────────────────────────────────────
+        st.markdown(
+            '<div class="tea-footer">Thinking-Enforced AI · v0.2<br/>기반: Want_to_Implement.pdf</div>',
+            unsafe_allow_html=True,
+        )
 
     return api_key, subject
 
@@ -388,14 +427,16 @@ def render_sidebar():
 # ============================================================
 def render_progress():
     cur_stage = st.session_state.current_stage
-    idx = STAGES.index(cur_stage)
-    progress = (idx + 1) / len(STAGES)
-    label = STAGE_NAMES_KO[cur_stage]
+    # 1) 5단계 stepper
+    render_stepper(STAGES, STAGE_SHORT_LABELS, cur_stage)
+    # 2) 현재 단계 강조 카드
+    full_name = STAGE_NAMES_KO[cur_stage]
+    turns_label = None
     if cur_stage != "synthesis":
         turns_here = count_user_turns_in_stage(cur_stage)
         min_req = STAGE_MIN_USER_TURNS.get(cur_stage, 1)
-        label += f"  ·  이 단계 턴 {turns_here}/{min_req}"
-    st.progress(progress, text=label)
+        turns_label = f"이 단계 응답 {turns_here}/{min_req} · 다음 단계로 가려면 {max(min_req - turns_here, 0)}회 더 응답"
+    render_stage_card(full_name, turns_label)
 
 
 def render_subject_panel(subject: str):
@@ -412,7 +453,7 @@ def render_chat_history():
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             if msg.get("is_synthesis"):
-                st.success("🎯 사고 종합 보고서 — 당신이 거친 사고 과정의 결과물입니다", icon="✨")
+                render_synthesis_banner()
                 st.markdown(msg["content"])
             else:
                 st.markdown(msg["content"])
@@ -485,8 +526,8 @@ def trigger_synthesis_if_pending(api_key: str, model: str, subject: str):
     client = OpenAI(api_key=api_key)
 
     with st.chat_message("assistant"):
-        with st.status("🧠 사고 과정을 종합하는 중…", expanded=True) as status:
-            st.write("1/2 단계: 대화에서 사고 구조 추출 중…")
+        with st.status("사고 과정을 종합하는 중…", expanded=True) as status:
+            st.write("**1/2** · 대화에서 사고 구조 추출")
             report, extracted = synthesize_session(
                 client,
                 model,
@@ -494,8 +535,9 @@ def trigger_synthesis_if_pending(api_key: str, model: str, subject: str):
                 st.session_state.messages,
                 st.session_state.thinking_data,
             )
-            st.write("2/2 단계: 최종 정리물 작성 완료")
-            status.update(label="✅ 종합 완료", state="complete", expanded=False)
+            st.write("**2/2** · 최종 정리물 작성 완료")
+            status.update(label="종합 완료", state="complete", expanded=False)
+        render_synthesis_banner()
         st.markdown(report)
 
     # 메시지로 영구 저장 + 상태 갱신
@@ -594,17 +636,15 @@ def main():
         page_title="Thinking-Enforced AI",
         page_icon="🧠",
         layout="wide",
+        initial_sidebar_state="expanded",
     )
+
+    inject_css()
 
     init_session()
     api_key, subject = render_sidebar()
 
-    st.title("🧠 Thinking-Enforced AI")
-    st.caption(
-        "AI를 막는 것이 아니라, 인간의 사고 과정을 보존한다 — "
-        "**탐색 → 질문 → 검증 → 수정 → 성찰**"
-    )
-
+    render_hero()
     render_progress()
     render_subject_panel(subject)
     render_chat_history()
