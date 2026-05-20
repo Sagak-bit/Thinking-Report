@@ -163,10 +163,12 @@ def build_system_prompt(subject: str, stage: str) -> str:
 # OpenAI 호출
 # ============================================================
 def call_chat(client: OpenAI, model: str, system_prompt: str, messages: list) -> str:
+    # temperature를 낮춰 mini 모델의 칭찬 reflex / free-styling 억제.
+    # 평가자(0)와 합성기(0~0.5)는 별도 함수에서 자체 temperature를 가짐.
     resp = client.chat.completions.create(
         model=model,
         messages=[{"role": "system", "content": system_prompt}] + messages,
-        temperature=0.7,
+        temperature=0.3,
     )
     return resp.choices[0].message.content
 
