@@ -57,6 +57,16 @@ CLOSURE_LABELS = {
     "reflective_revision": "사고 수정/강화 (Reflective Revision)",
 }
 
+# 단계별 최소 user 턴 수 — 평가자가 advance를 늦게 추천해도 이 턴 수가 차면 강제 진행.
+# closure 4조건이 일찍 충족돼도 한 단계씩만 advance하며 이 가드를 따른다.
+STAGE_MIN_USER_TURNS = {
+    "problem_framing": 1,         # 첫 응답으로 문제 재정의되면 진행 가능
+    "exploration": 2,             # 반례·다른 관점 탐색에 2턴
+    "thinking_construction": 2,   # 가설·근거·예상 반론 정립에 2턴
+    "reflective_feedback": 1,     # 사고 수정/강화 응답 1턴
+    # synthesis는 종착지 — 가드 없음
+}
+
 DATA_DIR = Path("thinking_data")
 
 # Streamlit Cloud 등 컨테이너 환경 감지 (filesystem이 ephemeral 함)
@@ -69,6 +79,14 @@ def get_api_key_from_secrets() -> str:
         return st.secrets.get("OPENAI_API_KEY", "")
     except Exception:
         return ""
+
+
+def count_user_turns_in_stage(stage: str) -> int:
+    """주어진 stage에서 사용자가 응답한 턴 수를 센다."""
+    return sum(
+        1 for m in st.session_state.messages
+        if m["role"] == "user" and m.get("stage") == stage
+    )
 
 
 # ============================================================
@@ -370,9 +388,15 @@ def render_sidebar():
 # 메인 영역
 # ============================================================
 def render_progress():
-    idx = STAGES.index(st.session_state.current_stage)
+    cur_stage = st.session_state.current_stage
+    idx = STAGES.index(cur_stage)
     progress = (idx + 1) / len(STAGES)
-    st.progress(progress, text=STAGE_NAMES_KO[st.session_state.current_stage])
+    label = STAGE_NAMES_KO[cur_stage]
+    if cur_stage != "synthesis":
+        turns_here = count_user_turns_in_stage(cur_stage)
+        min_req = STAGE_MIN_USER_TURNS.get(cur_stage, 1)
+        label += f"  ·  이 단계 턴 {turns_here}/{min_req}"
+    st.progress(progress, text=label)
 
 
 def render_subject_panel(subject: str):
@@ -419,27 +443,29 @@ def update_closure_and_stage(eval_result: dict):
 
     st.session_state.last_eval = eval_result
 
-    # 단계 진행 — 평가자 권고 + 안전 가드
-    cur_idx = STAGES.index(st.session_state.current_stage)
+    # 단계 진행 로직 — 한 번에 한 단계씩만, 최소 턴 가드 충족 시
+    cur_stage = st.session_state.current_stage
+    cur_idx = STAGES.index(cur_stage)
     if cur_idx >= len(STAGES) - 1:
-        return  # 이미 마지막
+        return  # 이미 synthesis — 더 진행할 곳 없음
 
-    advance = eval_result.get("stage_advance_recommended", False)
+    advance_recommended = eval_result.get("stage_advance_recommended", False)
+    closure_all_true = all(st.session_state.closure.values())
 
-    # 4조건 모두 충족되면 무조건 synthesis로 점프
-    if all(st.session_state.closure.values()):
-        if st.session_state.current_stage != "synthesis":
-            st.session_state.current_stage = "synthesis"
-            st.session_state.synthesis_pending = True  # 자동 합성 트리거
-            st.toast("🎉 Cognitive Closure 4조건 충족 — 사고 종합을 시작합니다")
+    # 현재 단계의 최소 user 턴 가드
+    user_turns_here = count_user_turns_in_stage(cur_stage)
+    min_required = STAGE_MIN_USER_TURNS.get(cur_stage, 1)
+    if user_turns_here < min_required:
+        # 충분히 머무르지 않음 — 진행 차단 (closure가 빨리 차도 무관)
         return
 
-    if advance:
+    # 진행 결정 — 평가자 권고 OR closure 4조건 충족 (단, 항상 한 단계씩만)
+    if advance_recommended or closure_all_true:
         next_stage = STAGES[cur_idx + 1]
         st.session_state.current_stage = next_stage
         if next_stage == "synthesis":
-            st.session_state.synthesis_pending = True  # 평가자 권고로 synthesis 진입
-            st.toast("🎉 사고 종합을 시작합니다")
+            st.session_state.synthesis_pending = True
+            st.toast("🎉 마지막 단계 도달 — 사고 종합을 시작합니다")
         else:
             st.toast(f"➡️ 다음 단계: {STAGE_NAMES_KO[next_stage]}")
 
@@ -503,7 +529,11 @@ def render_chat(api_key: str, model: str, subject: str):
         return
 
     client = OpenAI(api_key=api_key)
-    st.session_state.messages.append({"role": "user", "content": user_input})
+    st.session_state.messages.append({
+        "role": "user",
+        "content": user_input,
+        "stage": st.session_state.current_stage,
+    })
 
     with st.chat_message("user"):
         st.markdown(user_input)
